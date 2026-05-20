@@ -45,7 +45,7 @@ Claude:
 手動安裝（直到上 marketplace）：
 
 ```bash
-git clone https://github.com/EricCaiCai/claude-meeting-pipeline.git ~/.claude/plugins/meeting-pipeline
+git clone https://github.com/ericcai0814/claude-meeting-pipeline.git ~/.claude/plugins/meeting-pipeline
 ```
 
 ## Setup（一次性）
