@@ -1,0 +1,65 @@
+#!/bin/bash
+# transcribe-zh — 中文音訊轉逐字稿（mlx-whisper + anti-hallucination flags）
+# Usage:
+#   transcribe-zh <audio-file>                # 輸出到音訊同目錄
+#   transcribe-zh <audio-file> <output-dir>   # 指定輸出目錄
+#   transcribe-zh --dry-run <audio-file> ...  # 顯示要執行的指令但不執行
+#
+# 為何要包這個 script：
+#   mlx-whisper 預設 condition_on_previous_text=True，遇到中文長安靜段
+#   會陷入「好好好好...」「我現在要做什麼...」幻覺迴圈。本 script 預設
+#   開啟以下 anti-hallucination flags：
+#     --condition-on-previous-text False
+#     --no-speech-threshold 0.7
+#     --hallucination-silence-threshold 2
+#     --compression-ratio-threshold 2.0
+
+set -euo pipefail
+
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+  shift
+fi
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: transcribe-zh [--dry-run] <audio-file> [output-dir]" >&2
+  exit 1
+fi
+
+AUDIO="$1"
+OUTPUT_DIR="${2:-$(dirname "$AUDIO")}"
+
+if [[ ! -f "$AUDIO" ]]; then
+  echo "transcribe-zh: 音訊檔不存在: $AUDIO" >&2
+  exit 1
+fi
+
+if ! command -v mlx_whisper >/dev/null 2>&1; then
+  echo "transcribe-zh: mlx_whisper 未安裝" >&2
+  echo "  uv tool install mlx-whisper" >&2
+  exit 1
+fi
+
+CMD=(
+  mlx_whisper "$AUDIO"
+  --model mlx-community/whisper-large-v3-mlx
+  --language zh
+  --output-dir "$OUTPUT_DIR"
+  --output-format all
+  --condition-on-previous-text False
+  --no-speech-threshold 0.7
+  --hallucination-silence-threshold 2
+  --compression-ratio-threshold 2.0
+)
+
+if [[ $DRY_RUN -eq 1 ]]; then
+  printf '%q ' "${CMD[@]}"
+  echo
+  exit 0
+fi
+
+mkdir -p "$OUTPUT_DIR"
+echo "transcribe-zh: 轉錄 $AUDIO → $OUTPUT_DIR"
+echo "  首次跑會下載 large-v3 模型 (~3GB) 到 ~/.cache/huggingface/，之後快取"
+"${CMD[@]}"

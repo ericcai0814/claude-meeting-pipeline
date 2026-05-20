@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+
+# 使用者個人累積的會議測試檔
+test-meetings/
+sample-meetings/
