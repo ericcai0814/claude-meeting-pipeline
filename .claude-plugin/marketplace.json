@@ -1,0 +1,14 @@
+{
+  "name": "meeting-pipeline-market",
+  "owner": {
+    "name": "ericcai0814",
+    "url": "https://github.com/ericcai0814"
+  },
+  "plugins": [
+    {
+      "name": "meeting-pipeline",
+      "source": "./",
+      "description": "從中文會議音訊產生結構化會議紀錄與 issues；含 SessionStart 自動注入 CONTEXT.md name-map 偏移對照。macOS / Apple Silicon only。"
+    }
+  ]
+}
