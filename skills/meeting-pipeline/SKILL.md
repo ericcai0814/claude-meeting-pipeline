@@ -77,9 +77,11 @@ sort <output>.txt | uniq -c | sort -rn | head -5
 
 依選定 template 產出 `meeting-notes.md`，放在逐字稿同目錄。
 
-**前置：先讀詞彙表**：
-- **跨專案的 whisper 偏移**：[`references/glossary.md`](./references/glossary.md)（建議使用者依自己場域擴充——本 plugin 預設只有空殼架構）
-- **本專案專屬名詞**：repo 根目錄的 `CONTEXT.md`（若存在）——人名、產品、團隊內慣用語。本場紀錄末尾的「對照表」只列本場出現過的子集，不要照抄整份 glossary
+**前置（不可省）：先讀 glossary.md 與 CONTEXT.md，逐名對照**：
+- **跨專案偏移**：MUST 用 `Read` 讀本 skill 的 [`references/glossary.md`](./references/glossary.md)（Claude Code / 開發生態通用偏移；依自己場域持續擴充）。
+- **本專案專屬名詞**：若 repo 根目錄有 `CONTEXT.md`，**也 MUST `Read` 全文**（不是只 `test -f` 確認存在）——人名、產品、團隊內慣用語。
+- **判讀規則**：逐字稿每個專有名詞先比對上述兩份，**命中即用標準寫法、不要標 (?)**；只有兩份都查不到的新名才標 `_(?)_` 待人工校正。校正完一場後，把新確認的偏移累積回對應檔（跨專案→glossary.md，專屬→CONTEXT.md）。
+- 本場紀錄末尾若列「對照表」，只列本場出現過的子集，不要照抄整份 glossary。
 
 **讀取策略**：
 - 逐字稿可能很長（一場 1 小時的會議常見 3000-5000 行）。**先讀 200 行樣本**看品質與內容類型，再決定要不要分批讀完整。

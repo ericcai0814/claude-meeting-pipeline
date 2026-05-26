@@ -11,13 +11,28 @@
 
 ---
 
-## 領域 A（請改為自己領域名稱，例：Claude / OpenAI / 雲端服務 / ...）
+## Claude Code / Agent 生態（AI 工程 / 開發者會議常見）
+
+> 跨專案通用：凡是討論 Claude Code、agent、開發工具鏈的中文會議都易出現這些偏移。
 
 | 逐字稿（任一種寫法） | 實際 |
 |----------------------|------|
-| _(待填)_ | _(待填)_ |
+| Cloud Code / Cloud（指工具時） | **Claude Code** |
+| Honest / Honus / HARMES | **Harness** |
+| HOOP / HOODs / HOOCH | **Hook** |
+| Skell / Scale（指 Skill 時）/ Scull | **Skill** |
+| Site Agent / SY Agent / Savage | **Subagent** |
+| Prong / Pron / Chrome（指 Prompt 時） | **Prompt** |
+| Sation / Bond（指 Session 時） | **Session** |
+| Pretour Use / Post Tour Use | **Pre-tool-use / Post-tool-use** |
+| NCP | **MCP** |
+| Codecs / CodeC | **Codex** |
+| Folk / Foulk | **Fork** |
+| Nodes（指語言時） | **Node.js** |
+| Nobu LN / Notebook LN | **NotebookLM** |
+| Adrian / Adrian Skell | **agent skill**（非人名 / repo 名） |
 
-## 領域 B
+## 領域 B（換成你自己的領域：電商 / 醫療 / 金融 / …）
 
 | 逐字稿 | 實際 |
 |--------|------|
@@ -41,7 +56,7 @@
 
 | 逐字稿 | 實際 |
 |--------|------|
-| _(待填)_ | _(待填)_ |
+| 漸減（式） | **漸進（式）** |
 
 ## YouTube / 套語 hallucination
 
