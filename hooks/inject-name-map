@@ -1,0 +1,22 @@
+#!/bin/bash
+# meeting-pipeline plugin — SessionStart hook
+# 把該 repo CONTEXT.md 的 name-map 偏移對照注入開場 context（superpowers 式 injection）。
+# 讓「寫紀錄前 whisper 人名偏移要校正」這件事自動進到 context，不靠人記得讀檔。
+#
+# Guard：無 CONTEXT.md 或無 name-map 區塊 → 靜默跳過（對非會議 repo 無害）。
+# 不開 set -e/-u：缺檔/缺區塊是正常情況，display/inject script 不該因此中止。
+
+DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+CTX="$DIR/CONTEXT.md"
+
+[ -f "$CTX" ] || exit 0
+grep -q "name-map:start" "$CTX" || exit 0
+
+block=$(sed -n '/<!-- name-map:start -->/,/<!-- name-map:end -->/p' "$CTX" | grep -v 'name-map:start\|name-map:end')
+[ -n "$block" ] || exit 0
+
+# SessionStart hook 的 stdout 會被 Claude Code 注入為開場 context
+echo "## 寫會議紀錄前必讀：人名／專案 whisper 偏移對照（出自 CONTEXT.md，已確認）"
+echo "逐字稿出現右欄任一寫法 → 一律改用左欄標準寫法，不要再標 (?)："
+echo "$block"
+echo "未列在此表的新名字，才標 _(?)_ 待人工校正。"

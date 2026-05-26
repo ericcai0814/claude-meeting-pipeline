@@ -170,3 +170,18 @@ Created: YYYY-MM-DD
 - **三段式分層**：轉錄是純 shell（不需要 LLM 在 loop 裡），分離出來給其他工具/cron 也能用
 - **第 3 段可選**：不是每個 repo 都有 issue tracker，硬綁定會在沒設定的 repo 失敗
 - **不自動跑完三段**：第 2 段需要人校正才能進第 3 段——若 owner 認錯，issue 會拆給錯誤的人
+
+---
+
+## 擴充 / 維護原則（改這個 pipeline 時必讀）
+
+調整 pipeline 時，**一律機制化**，不要手動補單一案例：把修正編進 hook / script / 本 SKILL.md 步驟 / glossary.md，讓它下次自動生效。弱、手動的修正（散文「記得讀 X」）會被略過；機制化的修正才會累積生效。
+
+偏移詞的分工，**同一詞只住一個地方、不重複**：
+
+| 類型 | 住哪 |
+|------|------|
+| 跨專案偏移（Claude Code / Hook / MCP / Subagent…） | 本 plugin 的 [`references/glossary.md`](./references/glossary.md) |
+| 專案專屬名詞（人名、產品代號） | 各 repo 根目錄 `CONTEXT.md`，含 `<!-- name-map:start/end -->` 區塊 |
+
+本 plugin 的 SessionStart hook（[`hooks/inject-name-map`](../../hooks/inject-name-map)）會自動把該 repo `CONTEXT.md` 的 `name-map` 區塊注入開場 context——所以**第 2 段的名詞對照不靠人記得讀檔**，裝了 plugin 就有。新確認的偏移校正完一場後 append 回對應檔，對照表越用越準。
