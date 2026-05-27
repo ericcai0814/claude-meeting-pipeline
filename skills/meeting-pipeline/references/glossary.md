@@ -23,6 +23,7 @@
 | Skell / Scale（指 Skill 時）/ Scull | **Skill** |
 | Site Agent / SY Agent / Savage | **Subagent** |
 | Prong / Pron / Chrome（指 Prompt 時） | **Prompt** |
+| Discretion（指觸發描述時） | **description**（Skill / Memory 的觸發描述） |
 | Sation / Bond（指 Session 時） | **Session** |
 | Pretour Use / Post Tour Use | **Pre-tool-use / Post-tool-use** |
 | NCP | **MCP** |
