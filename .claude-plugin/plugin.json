@@ -1,7 +1,7 @@
 {
   "name": "meeting-pipeline",
   "version": "0.1.0",
-  "description": "從中文會議音訊（m4a/mp3/wav）產生結構化會議紀錄與 issues 的整合工作流。三段式：轉錄 → 紀錄 → 拆 issues。macOS / Apple Silicon only（mlx-whisper）。",
+  "description": "從中文會議音訊 / 影片（m4a/mp3/wav/mp4）產生結構化會議紀錄與 issues 的整合工作流。三段式：轉錄 → 紀錄 → 拆 issues。macOS / Apple Silicon only（mlx-whisper）。",
   "author": {
     "name": "ericcai0814",
     "url": "https://github.com/ericcai0814"

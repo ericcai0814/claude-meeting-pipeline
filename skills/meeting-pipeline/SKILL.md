@@ -1,6 +1,6 @@
 ---
 name: meeting-pipeline
-description: 從中文會議音訊（m4a/mp3/wav）產生結構化會議紀錄與 issues 的整合工作流。當用戶說「整理會議錄音」「轉逐字稿」「會議紀錄」「meeting notes」「整理這場會議」「拆 action items」，或丟一個音訊檔說要處理時觸發。涵蓋三段：(1) 呼叫 transcribe-zh 轉錄、(2) 依 references/notes-template.md 或 references/training-notes-template.md 產出會議紀錄、(3) 依 docs/agents/issue-tracker.md（若存在）拆 issues。
+description: 從中文會議音訊 / 影片（m4a/mp3/wav/mp4）產生結構化會議紀錄與 issues 的整合工作流。當用戶說「整理會議錄音」「轉逐字稿」「會議紀錄」「meeting notes」「整理這場會議」「拆 action items」，或丟一個音訊/影片檔說要處理時觸發。涵蓋三段：(1) 呼叫 transcribe-zh 轉錄、(2) 依 references/notes-template.md 或 references/training-notes-template.md 產出會議紀錄、(3) 依 docs/agents/issue-tracker.md（若存在）拆 issues。
 ---
 
 # Meeting Pipeline
@@ -31,7 +31,7 @@ transcribe-zh --dry-run /path/to/sample.m4a
 ## 使用情境
 
 - 用戶說「整理這場會議錄音」「轉成逐字稿」「會議紀錄」並提供音訊檔路徑
-- 用戶丟一個 `.m4a` / `.mp3` / `.wav` 並要你處理
+- 用戶丟一個 `.m4a` / `.mp3` / `.wav` / `.mp4` 並要你處理（`.mp4` 由 ffmpeg 抽音軌）
 - 已有逐字稿，想重產會議紀錄（從第 2 段開始）
 - 已有會議紀錄，想拆 issues（從第 3 段開始）
 
@@ -49,7 +49,7 @@ transcribe-zh <audio-file> [output-dir]
 
 ```
 meetings/<YYYY-MM-DD-slug>/
-├── <audio-file>.m4a              # 原音訊（建議走 git-lfs）
+├── <audio-file>.m4a/.mp4         # 原音訊/影片（建議走 git-lfs）
 ├── <audio-file>.txt              # 純逐字稿
 ├── <audio-file>.srt              # 含時間戳
 ├── <audio-file>.vtt              # 網頁字幕
@@ -64,6 +64,10 @@ sort <output>.txt | uniq -c | sort -rn | head -5
 ```
 
 如果最高重複行 > 50 次（連續同字 hallucination），代表 anti-hallucination flags 沒擋住，回頭手動加更嚴格參數重跑。常見原因：音訊有長段 BGM、回音、麥克風雜訊。
+
+**大型媒體檔 LFS 檢查（commit 前不可省）**：
+- 若原始輸入是 `.mp4` 或大型 `.m4a`，commit 前先確認 `.gitattributes` 覆蓋對應副檔名（例如 `*.mp4 filter=lfs diff=lfs merge=lfs -text`）。
+- 用 `git check-attr filter -- <media-file>` 確認會走 LFS，再 stage；不要把數百 MB 媒體直接寫進 git blob。
 
 ### 第 2 段：寫會議紀錄（需要 LLM 判斷）
 
@@ -100,6 +104,29 @@ sort <output>.txt | uniq -c | sort -rn | head -5
 - 英文人名/技術名詞偏移處用 `(?)` 標註
 - 不要強裝確定（Whisper 對英文人名/技術名詞中文化偏移率高）
 - 範例：`Nebula → Naple/Nebel _(Nebula?)_`、`Cloud Design _(?)_`
+
+**Entity Review Gate（拆 issues 前不可省）**：
+- 產出 `meeting-notes.md` 後，先列出本場 notes、逐字稿摘要、候選 issue 內容中所有 `_(?)_` 與會影響 issue 語意的未確認專有名詞；不要直接進第 3 段。
+- 每個未確認詞都先分型：`person`、`product/project`、`tool/repo`、`contextual phrase`、`possible hallucination`、`confirmed drift`。
+- 若未確認詞會影響 owner、產品範圍、blocker、DoD 或 action item，必須先請用戶校正；未校正前不要拆 issue。
+- 不要只掃 `meeting-notes.md`：有些詞可能只出現在準備拆出的 blocker / DoD 裡（例如既有產品、前作、競品、客戶系統），這些也必須進 gate。
+- 只有 `confirmed drift` 可以進 `name-map`；確認為真實人名、產品名、工具名時，應升級成 `CONTEXT.md` 的正式條目，而不是放進 `name-map`。
+- `contextual phrase`（同一詞在不同場景可能指不同對象）不得全域自動替換，也不得放進 `name-map`；保留在校正待辦或本場註記。
+
+**Name Correction Closure（用戶校正後必做）**：
+- 每次用戶確認 `_(?)_`，同步掃並更新三層 artifact：repo `CONTEXT.md`、本場 `meeting-notes.md`、本場已建立或候選的 `.scratch/**/issues/*.md`。
+- 若確認為 `confirmed drift`：只把「偏移 → 標準寫法」加入對應的 `name-map` / `glossary.md`，並把 notes / issues 中的偏移改成標準寫法。
+- 若確認為 `person`、`product/project`、`tool/repo`：新增或更新正式條目，移出「校正待辦」，並清掉 notes / issues 中該詞的 `_(?)_`。
+- 若確認為 `contextual phrase` 或 `possible hallucination`：不要全域替換；保留具體場次與判斷理由，避免下一場誤修。
+- Closure 沒完成前不要 commit notes 或 issues；若已 commit，補一個 correction commit 並在總結中說明原因。
+
+**Final Consistency Sweep（commit 前）**：
+- 優先跑 `meeting-entity-lint <meeting-dir> --confirmed <name:type>...`；script 不可用時才用下列人工 checklist。
+- 檢查 notes / issues 是否仍有已確認名詞的 `_(?)_`。
+- 檢查 `CONTEXT.md`「校正待辦」是否仍殘留已確認項。
+- 檢查 `name-map` 是否只包含「偏移 → 標準寫法」，不要放真實人名、產品名、工具名。
+- 檢查大型 media 檔是否走 LFS。
+- 任一項不通過，先修正再 commit；不要把待修狀態包進正常 notes / issues commit。
 
 ### 第 3 段：拆 issues（可選；需要 issue tracker setup）
 
@@ -151,9 +178,10 @@ Created: YYYY-MM-DD
 3. **第 1 段：背景跑 `transcribe-zh`**（用 `run_in_background: true`，2-10 分鐘）
 4. **等通知完成後**，驗證 hallucination
 5. **第 2 段：讀逐字稿並產出會議紀錄**，先給 user preview 並提示「英文人名可能誤判，建議校正」
-6. **等用戶校正完成**（人工 owner 認定不能省略，否則 issue 拆錯人）
-7. **第 3 段：依用戶確認後的 owner，挑值得追的 1-3 個 issue 拆出**
-8. **commit 分階段**：轉錄輸出一個 commit、會議紀錄一個、issues 一個
+6. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue
+7. **第 3 段：依用戶確認後的 owner 與名詞分類，挑值得追的 1-3 個 issue 拆出**
+8. **Final Consistency Sweep**：確認已校正名詞、`CONTEXT.md`、issues、LFS 都一致
+9. **commit 分階段**：轉錄輸出一個 commit、會議紀錄/CONTEXT 一個、issues 一個；若校正晚於 commit，補 correction commit 並說明原因
 
 ---
 

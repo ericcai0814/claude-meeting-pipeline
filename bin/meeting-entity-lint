@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""Lint meeting-pipeline entity closure across notes, issues, CONTEXT, and LFS."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+VALID_TYPES = {
+    "person",
+    "product/project",
+    "tool/repo",
+    "contextual phrase",
+    "possible hallucination",
+    "confirmed drift",
+}
+
+NAME_MAP_START = "<!-- name-map:start -->"
+NAME_MAP_END = "<!-- name-map:end -->"
+LARGE_AUDIO_BYTES = 50 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ConfirmedEntity:
+    name: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class Finding:
+    status: str
+    code: str
+    message: str
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Lint meeting-pipeline entity closure and media LFS status."
+    )
+    parser.add_argument("meeting_dir", help="Meeting directory containing meeting-notes.md")
+    parser.add_argument(
+        "--confirmed",
+        action="append",
+        default=[],
+        metavar="NAME:TYPE",
+        help=(
+            "Confirmed entity and type. Valid types: "
+            + ", ".join(sorted(VALID_TYPES))
+        ),
+    )
+    return parser.parse_args()
+
+
+def find_repo_root(start: Path) -> Path:
+    current = start.resolve()
+    if current.is_file():
+        current = current.parent
+    for candidate in [current, *current.parents]:
+        if (candidate / ".git").exists():
+            return candidate
+    raise SystemExit(f"meeting-entity-lint: cannot find repo root from {start}")
+
+
+def parse_confirmed(values: list[str]) -> list[ConfirmedEntity]:
+    entities: list[ConfirmedEntity] = []
+    for value in values:
+        if ":" not in value:
+            raise SystemExit(f"Invalid --confirmed value, expected NAME:TYPE: {value}")
+        name, kind = value.split(":", 1)
+        name = name.strip()
+        kind = kind.strip()
+        if not name:
+            raise SystemExit(f"Invalid --confirmed value, empty NAME: {value}")
+        if kind not in VALID_TYPES:
+            raise SystemExit(
+                f"Invalid type for {name}: {kind}. Valid: {', '.join(sorted(VALID_TYPES))}"
+            )
+        entities.append(ConfirmedEntity(name=name, kind=kind))
+    return entities
+
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(errors="replace")
+
+
+def rel(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def line_matches(path: Path, pattern: re.Pattern[str]) -> list[tuple[int, str]]:
+    if not path.exists():
+        return []
+    matches: list[tuple[int, str]] = []
+    for index, line in enumerate(read_text(path).splitlines(), 1):
+        if pattern.search(line):
+            matches.append((index, line.strip()))
+    return matches
+
+
+def source_points_to_meeting(source: str, meeting_notes_rel: str, meeting_dir_rel: str) -> bool:
+    normalized = source.strip().lstrip("./")
+    return normalized == meeting_notes_rel or normalized.startswith(meeting_dir_rel + "/")
+
+
+def issue_files_for_meeting(root: Path, meeting_notes_rel: str, meeting_dir_rel: str) -> list[Path]:
+    scratch = root / ".scratch"
+    if not scratch.exists():
+        return []
+    result: list[Path] = []
+    for path in scratch.glob("**/issues/*.md"):
+        text = read_text(path)
+        for line in text.splitlines()[:40]:
+            if line.startswith("Source:"):
+                source = line.split(":", 1)[1].strip()
+                if source_points_to_meeting(source, meeting_notes_rel, meeting_dir_rel):
+                    result.append(path)
+                break
+    return sorted(result)
+
+
+def extract_name_map(context_text: str) -> str:
+    start = context_text.find(NAME_MAP_START)
+    end = context_text.find(NAME_MAP_END)
+    if start == -1 or end == -1 or end < start:
+        return ""
+    start += len(NAME_MAP_START)
+    return context_text[start:end]
+
+
+def extract_correction_todo(context_text: str) -> str:
+    match = re.search(r"^##\s+校正待辦\s*$", context_text, re.MULTILINE)
+    if not match:
+        return ""
+    return context_text[match.end() :]
+
+
+def check_confirmed_residue(
+    files: list[Path], entities: list[ConfirmedEntity], root: Path
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for entity in entities:
+        pattern = re.compile(rf"{re.escape(entity.name)}\s*_\(\?\)_")
+        for path in files:
+            for line_no, line in line_matches(path, pattern):
+                findings.append(
+                    Finding(
+                        "FAIL",
+                        "confirmed-residue",
+                        f"{rel(path, root)}:{line_no} {entity.name}: {line}",
+                    )
+                )
+    return findings
+
+
+def check_unresolved_entities(files: list[Path], root: Path) -> list[Finding]:
+    pattern = re.compile(r"_\(\?\)_")
+    findings: list[Finding] = []
+    for path in files:
+        for line_no, line in line_matches(path, pattern):
+            if "`_(?)_`" in line:
+                continue
+            findings.append(
+                Finding(
+                    "WARN",
+                    "unresolved-entity",
+                    f"{rel(path, root)}:{line_no} {line}",
+                )
+            )
+    return findings
+
+
+def check_name_map_pollution(
+    context_path: Path, entities: list[ConfirmedEntity], root: Path
+) -> list[Finding]:
+    if not context_path.exists():
+        return []
+    name_map = extract_name_map(read_text(context_path))
+    findings: list[Finding] = []
+    for entity in entities:
+        if entity.kind == "confirmed drift":
+            continue
+        if re.search(rf"(^|\n).*{re.escape(entity.name)}.*", name_map):
+            findings.append(
+                Finding(
+                    "FAIL",
+                    "name-map-pollution",
+                    f"{rel(context_path, root)} name-map contains {entity.name}, but type is {entity.kind}",
+                )
+            )
+    return findings
+
+
+def check_context_todo_residue(
+    context_path: Path, entities: list[ConfirmedEntity], root: Path
+) -> list[Finding]:
+    if not context_path.exists():
+        return []
+    todo = extract_correction_todo(read_text(context_path))
+    findings: list[Finding] = []
+    for entity in entities:
+        if entity.name in todo:
+            findings.append(
+                Finding(
+                    "FAIL",
+                    "context-todo-residue",
+                    f"{rel(context_path, root)} 校正待辦 still contains {entity.name}",
+                )
+            )
+    return findings
+
+
+def git_check_attr_lfs(root: Path, path: Path) -> tuple[bool, str]:
+    try:
+        proc = subprocess.run(
+            ["git", "check-attr", "filter", "--", str(path)],
+            cwd=root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        return False, str(exc)
+    output = (proc.stdout or proc.stderr).strip()
+    return "filter: lfs" in output, output
+
+
+def media_files_to_check(meeting_dir: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in sorted(meeting_dir.iterdir()):
+        suffix = path.suffix.lower()
+        if suffix == ".mp4":
+            files.append(path)
+        elif suffix == ".m4a" and path.stat().st_size > LARGE_AUDIO_BYTES:
+            files.append(path)
+    return files
+
+
+def check_media_lfs(root: Path, meeting_dir: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for path in media_files_to_check(meeting_dir):
+        ok, output = git_check_attr_lfs(root, path)
+        if ok:
+            findings.append(Finding("PASS", "media-lfs", f"{rel(path, root)} filter=lfs"))
+        else:
+            findings.append(
+                Finding("FAIL", "media-lfs", f"{rel(path, root)} not lfs ({output})")
+            )
+    return findings
+
+
+def print_findings(findings: list[Finding]) -> None:
+    if not findings:
+        print("PASS meeting-entity-lint")
+        return
+
+    current_key: tuple[str, str] | None = None
+    for finding in findings:
+        key = (finding.status, finding.code)
+        if key != current_key:
+            if current_key is not None:
+                print()
+            print(f"{finding.status} {finding.code}")
+            current_key = key
+        print(finding.message)
+
+
+def main() -> int:
+    args = parse_args()
+    meeting_dir = Path(args.meeting_dir).resolve()
+    if not meeting_dir.is_dir():
+        raise SystemExit(f"meeting-entity-lint: meeting dir not found: {meeting_dir}")
+
+    root = find_repo_root(meeting_dir)
+    context_path = root / "CONTEXT.md"
+    notes_path = meeting_dir / "meeting-notes.md"
+    if not notes_path.exists():
+        raise SystemExit(f"meeting-entity-lint: missing {notes_path}")
+
+    meeting_dir_rel = rel(meeting_dir, root)
+    meeting_notes_rel = rel(notes_path, root)
+    issue_paths = issue_files_for_meeting(root, meeting_notes_rel, meeting_dir_rel)
+    confirmed = parse_confirmed(args.confirmed)
+
+    files_to_scan = [notes_path, *issue_paths]
+    findings: list[Finding] = []
+    findings.extend(check_unresolved_entities(files_to_scan, root))
+    findings.extend(check_confirmed_residue(files_to_scan, confirmed, root))
+    findings.extend(check_name_map_pollution(context_path, confirmed, root))
+    findings.extend(check_context_todo_residue(context_path, confirmed, root))
+    findings.extend(check_media_lfs(root, meeting_dir))
+
+    failures = [finding for finding in findings if finding.status == "FAIL"]
+    print_findings(findings)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
