@@ -1,0 +1,52 @@
+#!/bin/bash
+# meeting-scrub — 移除 whisper-zh 已知幻覺污染（中國 YouTube 訂閱字卡 spam），保留 .raw 備份
+#
+# Usage:
+#   meeting-scrub <meeting-dir>            # 掃該目錄所有 .txt
+#   meeting-scrub <file.txt> [more...]     # 指定檔
+#
+# 為何需要這支：
+#   whisper-large-v3 訓練資料含中國 YouTube 結尾字卡，會議錄音的靜音/微雜訊段
+#   會幻覺出「请不吝点赞 订阅 转发 打赏支持明镜与点点栏目」之類字串。transcribe-zh
+#   的 anti-hallucination flags 擋不掉這類「訓練烙印」（它在近似靜音時觸發），需要
+#   post-filter。錨點只用 spam 專屬詞（明镜/不吝/打赏/点点栏目），不會誤殺
+#   「一点点」「订阅」「转发」等正常語句。
+#
+# 冪等：首次把原始存成 <file>.txt.raw，之後一律從 .raw 重刷，可反覆執行不累積破壞。
+set -uo pipefail
+
+# spam 專屬錨點：這些詞只出現在訂閱字卡，不出現在正常中文會議語句
+BLOCK='明镜|明鏡|不吝|打赏|打賞|点点栏目|點點欄目'
+
+# 計可見行數（含無 trailing newline 的最後一行；空檔回 0）。
+# 用 grep -c '' 而非 wc -l：wc -l 數的是 \n 個數，最後一行無換行會少算 1，
+# 而 grep 輸出時會補換行，導致 before/after 不對稱、removed 出現 -1。
+count() { local n; n=$(grep -c '' "$1" 2>/dev/null) || n=0; echo "$n"; }
+
+scrub_one() {
+  local txt="$1" raw before after removed
+  raw="${txt}.raw"
+  # 首次把原始存成 .raw；之後一律從 .raw 重刷（冪等）。
+  # ⚠️ 若 .txt 在初次 scrub 後被「手動編輯」，重跑會以 .raw 覆蓋掉手動變更（設計如此）。
+  [[ -f "$raw" ]] || cp "$txt" "$raw"
+  before=$(count "$raw")
+  grep -avE "$BLOCK" "$raw" > "$txt" || true
+  after=$(count "$txt")
+  removed=$((before - after))
+  printf "  scrub  -%-3s spam 行  (%s→%s)  %s\n" "$removed" "$before" "$after" "$(basename "$txt")"
+}
+
+[[ $# -lt 1 ]] && { echo "Usage: meeting-scrub <dir-or-txt> ..." >&2; exit 1; }
+for arg in "$@"; do
+  if [[ -d "$arg" ]]; then
+    shopt -s nullglob
+    matched=0
+    for f in "$arg"/*.txt; do scrub_one "$f"; matched=$((matched+1)); done
+    shopt -u nullglob
+    [[ $matched -eq 0 ]] && echo "  ⚠️  $arg 下沒有 .txt（注意：只掃一層；本 repo 巢狀結構請傳入各場次目錄，非 repo 根）" >&2
+  elif [[ -f "$arg" ]]; then
+    scrub_one "$arg"
+  else
+    echo "  skip (not found): $arg" >&2
+  fi
+done

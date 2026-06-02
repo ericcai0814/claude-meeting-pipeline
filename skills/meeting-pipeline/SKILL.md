@@ -18,6 +18,7 @@ description: 從中文會議音訊 / 影片（m4a/mp3/wav/mp4）產生結構化�
 | macOS / Apple Silicon | — |
 | `mlx-whisper` | `uv tool install mlx-whisper` |
 | `transcribe-zh` | plugin 已附在 `${CLAUDE_PLUGIN_ROOT}/bin/transcribe-zh`，建議 `cp` 或 symlink 到 PATH（`~/.local/bin/` 或 `~/bin/`） |
+| `meeting-scrub` | plugin 已附在 `${CLAUDE_PLUGIN_ROOT}/bin/meeting-scrub`，同樣 `cp` 或 symlink 到 PATH。轉錄後清除已知幻覺字卡 |
 | `ffmpeg`（mlx-whisper 依賴） | `brew install ffmpeg` |
 
 驗證：
@@ -57,13 +58,21 @@ meetings/<YYYY-MM-DD-slug>/
 └── <audio-file>.json             # 完整 metadata
 ```
 
-**驗證轉錄品質**（不可省）：
+**清除已知幻覺字卡（不可省，緊接轉錄後）**：
+
+```bash
+meeting-scrub <meeting-dir>          # 或 meeting-scrub <output>.txt
+```
+
+`whisper-large-v3` 訓練資料含中國 YouTube 結尾字卡，會議錄音的靜音 / 微雜訊段會幻覺出「请不吝点赞 订阅 转发 打赏支持明镜与点点栏目」之類字串——這是**訓練烙印**，`transcribe-zh` 的 anti-hallucination flags（針對靜音迴圈）擋不掉。`meeting-scrub` 用 spam 專屬錨點（`明镜/不吝/打赏/点点栏目`）刪除這類行，**不誤殺**「一点点 / 订阅 / 转发」等正常語句；原始逐字稿備份為 `<檔名>.txt.raw`（冪等，可反覆執行；*但 .txt 若在初次 scrub 後被手動編輯，重跑會以 .raw 覆蓋掉編輯*）。傳入目錄時**只掃一層** `.txt`——本 repo 巢狀結構（`meetings/meetings/<slug>/`）請傳入各**場次目錄**而非 repo 根。輸出每場移除行數，供人工核對。
+
+**驗證轉錄品質**（不可省，scrub 之後）：
 
 ```bash
 sort <output>.txt | uniq -c | sort -rn | head -5
 ```
 
-如果最高重複行 > 50 次（連續同字 hallucination），代表 anti-hallucination flags 沒擋住，回頭手動加更嚴格參數重跑。常見原因：音訊有長段 BGM、回音、麥克風雜訊。
+scrub 處理的是「已知固定字卡」；此步再抓**未知**的連續同字 hallucination。如果最高重複行 > 50 次（連續同字，如「好好好…」），代表 anti-hallucination flags 沒擋住，回頭手動加更嚴格參數重跑。常見原因：音訊有長段 BGM、回音、麥克風雜訊。
 
 **大型媒體檔 LFS 檢查（commit 前不可省）**：
 - 若原始輸入是 `.mp4` 或大型 `.m4a`，commit 前先確認 `.gitattributes` 覆蓋對應副檔名（例如 `*.mp4 filter=lfs diff=lfs merge=lfs -text`）。
@@ -176,7 +185,7 @@ Created: YYYY-MM-DD
 1. **先確認** issue tracker 是否設定 → 決定要不要跑第 3 段
 2. **決定輸出位置** → 通常是 `meetings/<YYYY-MM-DD-slug>/`，問用戶會議的 slug 名稱
 3. **第 1 段：背景跑 `transcribe-zh`**（用 `run_in_background: true`，2-10 分鐘）
-4. **等通知完成後**，驗證 hallucination
+4. **等通知完成後**，跑 `meeting-scrub` 清字卡幻覺 → 再驗證殘留 hallucination
 5. **第 2 段：讀逐字稿並產出會議紀錄**，先給 user preview 並提示「英文人名可能誤判，建議校正」
 6. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue
 7. **第 3 段：依用戶確認後的 owner 與名詞分類，挑值得追的 1-3 個 issue 拆出**
