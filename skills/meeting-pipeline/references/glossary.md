@@ -32,6 +32,7 @@
 | Nodes（指語言時） | **Node.js** |
 | Nobu LN / Notebook LN | **NotebookLM** |
 | Adrian / Adrian Skell | **agent skill**（非人名 / repo 名） |
+| slate（指發會議紀錄／團隊溝通平台時） | **Slack** |
 
 ## 領域 B（換成你自己的領域：電商 / 醫療 / 金融 / …）
 

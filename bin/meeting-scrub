@@ -43,10 +43,13 @@ for arg in "$@"; do
     matched=0
     for f in "$arg"/*.txt; do scrub_one "$f"; matched=$((matched+1)); done
     shopt -u nullglob
-    [[ $matched -eq 0 ]] && echo "  ⚠️  $arg 下沒有 .txt（注意：只掃一層；本 repo 巢狀結構請傳入各場次目錄，非 repo 根）" >&2
+    if [[ $matched -eq 0 ]]; then
+      echo "  ⚠️  $arg 下沒有 .txt（注意：只掃一層；本 repo 巢狀結構請傳入各場次目錄，非 repo 根）" >&2
+    fi
   elif [[ -f "$arg" ]]; then
     scrub_one "$arg"
   else
     echo "  skip (not found): $arg" >&2
   fi
 done
+exit 0
