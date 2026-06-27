@@ -137,6 +137,25 @@ scrub 處理的是「已知固定字卡」；此步再抓**未知**的連續同�
 - 檢查大型 media 檔是否走 LFS。
 - 任一項不通過，先修正再 commit；不要把待修狀態包進正常 notes / issues commit。
 
+### 第 2.5 段：先 commit 初版會議紀錄 + 建立 review TODO 索引
+
+Eric 可能不會立刻 review 會議紀錄，所以**會議紀錄建立且驗證完成後，要先 commit 一次初版 artifacts**，不要等 entity review 完才 commit。這個 commit 的目的只是保存可追蹤的會議紀錄，不代表內容已完全校稿。
+
+在 commit 前必須建立本場 `review-todo.md`：
+
+- 收錄所有 `待確認`、英文/人名/系統名 ASR 不確定、owner ambiguity、scope ambiguity、需要客戶/內部確認的問題。
+- 每項給穩定 ID（例如 `<slug>-001`）、問題描述、影響範圍、來源位置（`meeting-notes.md` section 與 transcript line/time）、owner、status。
+- `metadata.json` / `artifacts.md` 要指向 `review-todo.md`，並標記 review status 為 `pending_user_review`。
+
+commit 規則：
+
+- 若 repo 有其他 unrelated dirty files，只 stage 本場 meeting directory 與必要支援變更（例如 `.gitattributes` 補 LFS pattern）。
+- 大型媒體檔 commit 前先用 `git check-attr filter -- <file>` 確認走 LFS；缺 pattern 時先補 `.gitattributes`（例如 `*.mov filter=lfs diff=lfs merge=lfs -text`）。
+- commit message 用 `notes: add <date/topic> meeting artifacts` 或同等清楚格式。
+- 這個 pre-review commit **不等於可以拆 issues**；`.scratch/**/issues/*.md` 仍要等 Eric 校正 owner / entity / scope 後才建立。
+
+Eric 後續 review/correction 時：同步 patch `meeting-notes.md`、`meeting-notes-line.txt`、`discord-draft.md`、`metadata.json`、`artifacts.md`、`review-todo.md` 與必要 glossary / CONTEXT，跑 residue search，然後再 commit 一次 correction。
+
 ### 第 3 段：拆 issues（可選；需要 issue tracker setup）
 
 **前置檢查**：
@@ -187,10 +206,11 @@ Created: YYYY-MM-DD
 3. **第 1 段：背景跑 `transcribe-zh`**（用 `run_in_background: true`，2-10 分鐘）
 4. **等通知完成後**，跑 `meeting-scrub` 清字卡幻覺 → 再驗證殘留 hallucination
 5. **第 2 段：讀逐字稿並產出會議紀錄**，先給 user preview 並提示「英文人名可能誤判，建議校正」
-6. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue
-7. **第 3 段：依用戶確認後的 owner 與名詞分類，挑值得追的 1-3 個 issue 拆出**
-8. **Final Consistency Sweep**：確認已校正名詞、`CONTEXT.md`、issues、LFS 都一致
-9. **commit 分階段**：轉錄輸出一個 commit、會議紀錄/CONTEXT 一個、issues 一個；若校正晚於 commit，補 correction commit 並說明原因
+6. **建立 review-todo.md + pre-review commit**：把所有待確認問題索引化，驗證 artifacts，先 commit 本場會議紀錄；不要等用戶 review 才 commit。
+7. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue
+8. **第 3 段：依用戶確認後的 owner 與名詞分類，挑值得追的 1-3 個 issue 拆出**
+9. **Final Consistency Sweep**：確認已校正名詞、`CONTEXT.md`、issues、LFS 都一致
+10. **commit 分階段**：初版會議紀錄先 commit；review correction 再 commit；issues 另 commit。若校正晚於初版 commit，補一個 correction commit 並說明原因
 
 ---
 
@@ -206,7 +226,7 @@ Created: YYYY-MM-DD
 
 - **三段式分層**：轉錄是純 shell（不需要 LLM 在 loop 裡），分離出來給其他工具/cron 也能用
 - **第 3 段可選**：不是每個 repo 都有 issue tracker，硬綁定會在沒設定的 repo 失敗
-- **不自動跑完三段**：第 2 段需要人校正才能進第 3 段——若 owner 認錯，issue 會拆給錯誤的人
+- **初版 notes 可先 commit，但不自動拆 issues**：第 2 段完成後先用 `review-todo.md` 記錄待確認問題並 commit 初版；第 3 段仍需要人校正後才能進行——若 owner 認錯，issue 會拆給錯誤的人
 
 ---
 
