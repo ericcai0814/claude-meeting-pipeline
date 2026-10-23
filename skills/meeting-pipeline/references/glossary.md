@@ -32,6 +32,7 @@
 | Nodes（指語言時） | **Node.js** |
 | Nobu LN / Notebook LN | **NotebookLM** |
 | Adrian / Adrian Skell | **agent skill**（非人名 / repo 名） |
+| slate（指發會議紀錄／團隊溝通平台時） | **Slack** |
 
 ## 領域 B（換成你自己的領域：電商 / 醫療 / 金融 / …）
 
@@ -63,11 +64,11 @@
 
 mlx-whisper 對音訊**尾端靜音段**或**長段 BGM** 容易產生這類重複 hallucination，**務必刪除**：
 
-- 中國 YouTube 訂閱套語（例：「请不吝点赞 订阅 转发 打赏支持...」）
-- 連續 50+ 次的「好好好好…」「我现在要做什么…」— 中文長靜音段陷阱
+- 中國 YouTube 訂閱套語（例：「请不吝点赞 订阅 转发 打赏支持...」）→ **已機制化**：由 `meeting-scrub`（plugin `bin/`）依 spam 專屬錨點自動刪除，不必手動處理；本表保留作為「為什麼要 scrub」的說明
+- 連續 50+ 次的「好好好好…」「我现在要做什么…」— 中文長靜音段陷阱（屬未知迴圈，scrub 不處理，靠下方 `uniq` 驗證 + 重轉）
 - 重複的「謝謝大家」「拜拜」— 收尾若超過 3 次也是 hallucination
 
-> 驗證方法：`sort <output>.txt | uniq -c | sort -rn | head -10`，若某行重複 > 30 次，基本確定為 hallucination。
+> 驗證方法：`sort <output>.txt | uniq -c | sort -rn | head -10`，若某行重複 > 50 次（連續同字），基本確定為 hallucination（與 SKILL.md 第 1 段門檻一致）。
 
 ---
 
