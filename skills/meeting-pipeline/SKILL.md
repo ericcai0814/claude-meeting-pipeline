@@ -1,6 +1,6 @@
 ---
 name: meeting-pipeline
-description: 從中文會議音訊 / 影片（m4a/mp3/wav/mp4）產生結構化會議紀錄與 issues 的整合工作流。當用戶說「整理會議錄音」「轉逐字稿」「會議紀錄」「meeting notes」「整理這場會議」「拆 action items」，或丟一個音訊/影片檔說要處理時觸發。涵蓋三段：(1) 呼叫 transcribe-zh 轉錄、(2) 依 references/notes-template.md 或 references/training-notes-template.md 產出會議紀錄、(3) 依 docs/agents/issue-tracker.md（若存在）拆 issues。
+description: 從中文會議音訊 / 影片（m4a/mp3/wav/mp4）產生結構化會議紀錄與 issues 的整合工作流。當用戶說「整理會議錄音」「轉逐字稿」「會議紀錄」「meeting notes」「整理這場會議」「拆 action items」「逐場確認待辦」「會議同步到 ws」，或丟一個音訊/影片檔說要處理時觸發。涵蓋三段：(1) 呼叫 transcribe-zh 轉錄、(2) 依 references/notes-template.md 或 references/training-notes-template.md 產出會議紀錄、(3) 依 docs/agents/issue-tracker.md（若存在）拆 issues。
 ---
 
 # Meeting Pipeline
@@ -207,10 +207,11 @@ Created: YYYY-MM-DD
 4. **等通知完成後**，跑 `meeting-scrub` 清字卡幻覺 → 再驗證殘留 hallucination
 5. **第 2 段：讀逐字稿並產出會議紀錄**，先給 user preview 並提示「英文人名可能誤判，建議校正」
 6. **建立 review-todo.md + pre-review commit**：把所有待確認問題索引化，驗證 artifacts，先 commit 本場會議紀錄；不要等用戶 review 才 commit。
-7. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue
+7. **Entity Review Gate**：等用戶校正 owner 與關鍵未確認名詞；仍有影響 issue 語意的 `_(?)_` 時不要拆 issue。逐場清 `待確認` 的問法見 [`references/review-and-sync.md`](./references/review-and-sync.md) §Review
 8. **第 3 段：依用戶確認後的 owner 與名詞分類，挑值得追的 1-3 個 issue 拆出**
 9. **Final Consistency Sweep**：確認已校正名詞、`CONTEXT.md`、issues、LFS 都一致
 10. **commit 分階段**：初版會議紀錄先 commit；review correction 再 commit；issues 另 commit。若校正晚於初版 commit，補一個 correction commit 並說明原因
+11. **同步 workspace**（Eric 要求時）：校正後的負責人、狀態、人名用 PR 帶進 `~/workspace`，流程見 [`references/review-and-sync.md`](./references/review-and-sync.md) §Sync
 
 ---
 
